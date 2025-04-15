@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>LPG Gas Leak Monitoring Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #f9fafb;
+      color: #111827;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+    header {
+      background: linear-gradient(135deg, #60a5fa, #3b82f6);
+      padding: 20px;
+      text-align: center;
+      color: white;
+      font-size: 24px;
+      font-weight: bold;
+      letter-spacing: 1px;
+    }
+    .container {
+      max-width: 1000px;
+      margin: auto;
+      padding: 30px 20px;
+      animation: fadeIn 1.5s ease;
+    }
+    .status-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 30px;
+    }
+    #leakIcon {
+      font-size: 60px;
+      margin-bottom: 10px;
+      transition: transform 0.5s ease;
+    }
+    .alert #leakIcon {
+      color: #dc2626;
+      animation: pulse 1.2s infinite;
+    }
+    .safe #leakIcon {
+      color: #10b981;
+    }
+    #statusBadge {
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-weight: bold;
+      font-size: 16px;
+    }
+    .alert #statusBadge {
+      background-color: #fee2e2;
+      color: #b91c1c;
+      border: 1px solid #fca5a5;
+    }
+    .safe #statusBadge {
+      background-color: #d1fae5;
+      color: #047857;
+      border: 1px solid #6ee7b7;
+    }
+    .info-cards {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-around;
+      margin: 20px 0;
+    }
+    .card {
+      background-color: white;
+      padding: 20px;
+      border-radius: 12px;
+      width: 45%;
+      min-width: 180px;
+      text-align: center;
+      margin: 10px 0;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+      border: 1px solid #e5e7eb;
+    }
+    .card h3 {
+      margin-bottom: 8px;
+      font-size: 18px;
+      color: #374151;
+    }
+    .card span {
+      font-size: 22px;
+      font-weight: bold;
+      color: #1f2937;
+    }
+    #refreshBtn {
+      background: #3b82f6;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      font-weight: bold;
+      border-radius: 8px;
+      cursor: pointer;
+      margin: 20px auto;
+      display: block;
+      transition: background 0.3s ease;
+    }
+    #refreshBtn:hover {
+      background: #2563eb;
+    }
+    canvas {
+      margin-top: 30px;
+      background: white;
+      border-radius: 12px;
+      padding: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
+    #historyList {
+      margin-top: 40px;
+      background: #fff;
+      border-radius: 8px;
+      padding: 20px;
+      border: 1px solid #e5e7eb;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
+    #historyList h3 {
+      margin-bottom: 10px;
+      color: #374151;
+    }
+    #historyList ul {
+      list-style: none;
+      padding-left: 20px;
+    }
+    #historyList li {
+      margin-bottom: 5px;
+      color: #4b5563;
+    }
+    footer {
+      text-align: center;
+      font-size: 13px;
+      margin: 30px 0 10px;
+      color: #6b7280;
+    }
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.1); opacity: 0.8; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+  <header>🚨 LPG GAS LEAK MONITORING DASHBOARD</header>
+
+  <div class="container" id="mainContainer">
+    <div class="status-box" id="statusBox">
+      <div id="leakIcon">🔥</div>
+      <div id="statusBadge">Checking...</div>
+    </div>
+
+    <div class="info-cards">
+      <div class="card">
+        <h3>Total Leaks</h3>
+        <span id="count">0</span>
+      </div>
+      <div class="card">
+        <h3>Last Leak Time</h3>
+        <span id="lastLeak">N/A</span>
+      </div>
+      <div class="card">
+        <h3>Trend</h3>
+        <span id="trend">⏳</span>
+      </div>
+    </div>
+
+    <button id="refreshBtn" onclick="fetchData(true)">🔄 Refresh</button>
+
+    <canvas id="leakChart" height="90"></canvas>
+
+    <div id="historyList">
+      <h3>📜 Leak History</h3>
+      <ul id="leakHistory"></ul>
+    </div>
+
+    <footer>
+      Made for your LPG Detector Project • Light Theme 💡
+    </footer>
+  </div>
+
+  <audio id="alertSound" src="https://www.soundjay.com/buttons/beep-07.mp3" preload="auto"></audio>
+
+  <script>
+    let previousCount = 0;
+
+    async function fetchData(forcePlay = false) {
+      const res = await fetch('/data');
+      const data = await res.json();
+
+      const count = data.length;
+      const lastLeak = data[data.length - 1];
+      document.getElementById('count').textContent = count;
+      document.getElementById('lastLeak').textContent = lastLeak
+        ? new Date(lastLeak).toLocaleString()
+        : 'N/A';
+
+      const now = new Date();
+      const last = new Date(lastLeak);
+      const diffMin = (now - last) / 60000;
+
+      const statusBox = document.getElementById('statusBox');
+      const statusBadge = document.getElementById('statusBadge');
+
+      if (count === 0 || diffMin > 10) {
+        statusBox.className = "status-box safe";
+        statusBadge.textContent = "✅ Safe";
+      } else {
+        statusBox.className = "status-box alert";
+        statusBadge.textContent = "⚠️ ALERT: Leak Detected";
+        if (count > previousCount || forcePlay) {
+          document.getElementById('alertSound').play();
+        }
+      }
+
+      if (count > previousCount) {
+        trend.textContent = "📈 Increasing";
+        trend.style.color = "#dc2626";
+      } else if (count < previousCount) {
+        trend.textContent = "📉 Decreasing";
+        trend.style.color = "#10b981";
+      } else {
+        trend.textContent = "➖ Stable";
+        trend.style.color = "#d97706";
+      }
+
+      previousCount = count;
+
+      const dayCounts = {};
+      const historyList = document.getElementById('leakHistory');
+      historyList.innerHTML = '';
+
+      let currentMonth = new Date().toISOString().slice(0, 7);
+      let monthlyCount = 0;
+
+      data.forEach(ts => {
+        const date = new Date(ts);
+        const day = date.toISOString().split('T')[0];
+        const month = date.toISOString().slice(0, 7);
+        if (month === currentMonth) monthlyCount++;
+        dayCounts[day] = (dayCounts[day] || 0) + 1;
+
+        const li = document.createElement('li');
+        li.textContent = date.toLocaleString();
+        historyList.appendChild(li);
+      });
+
+      if (monthlyCount > 3) {
+        alert("🚨 Alert: Leak count exceeded for this month!");
+      }
+
+      const labels = Object.keys(dayCounts);
+      const counts = Object.values(dayCounts);
+
+      const ctx = document.getElementById('leakChart').getContext('2d');
+      if (window.leakChart) window.leakChart.destroy();
+      window.leakChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Leak Frequency',
+            data: counts,
+            borderColor: '#3b82f6',
+            backgroundColor: 'rgba(96,165,250,0.2)',
+            tension: 0.4,
+            fill: true
+          }]
+        },
+        options: {
+          plugins: { legend: { labels: { color: "#1f2937" } } },
+          scales: {
+            y: { beginAtZero: true, ticks: { color: "#1f2937" } },
+            x: { ticks: { color: "#1f2937" } }
+          }
+        }
+      });
+    }
+
+    fetchData();
+    setInterval(fetchData, 10000);
+  </script>
+</body>
+</html>
+
