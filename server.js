@@ -2,7 +2,6 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const app = express();
-const PORT = process.env.PORT || 3000;
 
 const DATA_FILE = './data.json';
 let leakData = fs.existsSync(DATA_FILE) ? JSON.parse(fs.readFileSync(DATA_FILE)) : [];
@@ -24,8 +23,8 @@ app.get('/data', (req, res) => {
   res.json(leakData);
 });
 
-app.listen(process.env.PORT || 10000, () => {
-  console.log(`Server running on port ${process.env.PORT || 10000}`);
+const PORT = process.env.PORT || 10000;  // ✅ Keep only this
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
-
 
