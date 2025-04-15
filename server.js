@@ -24,7 +24,8 @@ app.get('/data', (req, res) => {
   res.json(leakData);
 });
 
-app.listen(PORT, () => {
-  console.log(`✅ Server running at http://localhost:${PORT}`);
+app.listen(process.env.PORT || 10000, () => {
+  console.log(`Server running on port ${process.env.PORT || 10000}`);
 });
+
 
